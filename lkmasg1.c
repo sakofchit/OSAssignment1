@@ -10,13 +10,13 @@
 #include <linux/kernel.h>	  // Kernel header for convenient functions.
 #include <linux/fs.h>		  // File-system support.
 #include <linux/uaccess.h>	  // User access copy function support.
-#define DEVICE_NAME "lkmasg1" // Device name.
-#define CLASS_NAME "char"	  ///< The device class -- this is a character device driver
+#define DEVICE_NAME "lkmasg1"     // Device name.
+#define CLASS_NAME "char"	  // Character device driver.
 
 
 MODULE_LICENSE("GPL");						 ///< The license type -- this affects available functionality
 MODULE_AUTHOR("John Aedo");					 ///< The author -- visible when you use modinfo
-MODULE_DESCRIPTION("lkmasg1 Kernel Module"); ///< The description -- see modinfo
+MODULE_DESCRIPTION("lkmasg1 Kernel Module");                     ///< The description -- see modinfo
 MODULE_VERSION("0.1");						 ///< A version number to inform users
 
 /**
@@ -24,9 +24,9 @@ MODULE_VERSION("0.1");						 ///< A version number to inform users
 */
 
 static int major_number;
-static char message[256] = {0};
-static short size_of_message;
-static struct class *lkmasg1Class = NULL;	///< The device-driver class struct pointer
+static char message[1024] = {0};
+static short messageSize;
+static struct class *lkmasg1Class = NULL; ///< The device-driver class struct pointer
 static struct device *lkmasg1Device = NULL; ///< The device-driver device struct pointer
 
 /**
@@ -145,7 +145,6 @@ static int close(struct inode *inodep, struct file *filep)
  */
 
 static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset){
-
 	printk(KERN_INFO "read stub");
 
 	int error_count = 0;
@@ -153,29 +152,29 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 	int i;
 
 	// If not enough data is available to service a read request, the driver must respond with only the amount available (including 0 bytes).
-	if(len > size_of_message)
-		len = size_of_message;
+	if(len > messageSize)
+		len = messageSize;
 
 	error_count = copy_to_user(buffer, message, len);
 
 	if (error_count == 0) {           // if true then have success
-		printk(KERN_INFO "lkmasg1: Sent %zu characters to the user: %s\n", len, buffer);
+		printk(KERN_INFO "lkmasg1: %zu characters sent to user: %s.\n", len, buffer);
 
 		int j = 0;
-		for(i = len; i < size_of_message; i++) {
+		for(i = len; i < messageSize; i++) {
 			temp[j] = message[i];
 			j++;
 		}
 
-		size_of_message = size_of_message - len; // update the size of the message
-		strcpy(message, temp);					 // copy temp to message
+		messageSize = messageSize - len; // update the size of the message
+		strcpy(message, temp); // copy temp to message
 
 		return 0;
 	}
 
 	else {
-		printk(KERN_INFO "lkmasg1: Failed to send %d characters to the user\n", error_count);
-		return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
+		printk(KERN_INFO "lkmasg1: Failed to send %d characters to user.\n", error_count);
+		return -EFAULT;
    	}
 }
 
@@ -183,21 +182,18 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
  * Writes to the device
  */
 
-static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
-{
-
+static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
 	printk(KERN_INFO "write stub");
 
-	int max_message_size = (int)(sizeof(message) - size_of_message - 1); // -1 for null terminator
+	int max_message_size = (int)(sizeof(message) - messageSize - 1); // -1 for null terminator
 
 	// If not enough buffer is available to store a write request, the driver must store only up to the amount available
 	if (len > max_message_size)
 		len = max_message_size;
 
-	strncat(message, buffer, len); 			// appending received string with its length
-	size_of_message = strlen(message); 		// store the length of the stored message
-	printk(KERN_INFO "lkmasg1: Received %zu characters from the user\n", len);
+	strncat(message, buffer, len); // append received string with its length
+	messageSize = strlen(message); // store length of the stored message
+	printk(KERN_INFO "lkmasg1: Received %zu characters from the user.\n", len);
 
 	return len;
-
 }
