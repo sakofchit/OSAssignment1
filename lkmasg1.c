@@ -2,6 +2,7 @@
  * File:	lkmasg1.c
  * Adapted for Linux 5.15 by: John Aedo
  * Class:	COP4600-SP23
+ * Victor Yue, Tahsin Islam, Sakun Chitraacharige
 */
 
 #include <linux/module.h>	  // Core header for modules.
@@ -145,33 +146,57 @@ static int close(struct inode *inodep, struct file *filep)
 
 static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset){
 
-	printk(KERN_INFO "READ STUB");
+	printk(KERN_INFO "read stub");
 
 	int error_count = 0;
-   	error_count = copy_to_user(buffer, message, size_of_message);
+	char temp[sizeof(message)] = {0}; // temporary array to hold message without read data
+	int i;
+	
+	// If not enough data is available to service a read request, the driver must respond with only the amount available (including 0 bytes).
+	if(len > size_of_message)
+		len = size_of_message;
+    
+   	error_count = copy_to_user(buffer, message, len);
+ 
+   	if (error_count == 0) {           // if true then have success
+		printk(KERN_INFO "lkmasg1: Sent %zu characters to the user: %s\n", len, buffer);
+		
+		int j = 0;
+		for(i = len; i < size_of_message; i++) {
+		    temp[j] = message[i];
+			j++;
+        }
+        
+        size_of_message = size_of_message - len; // update the size of the message
+        strcpy(message, temp);					 // copy temp to message
 
-   	if(error_count == 0){            // if true then have success
-  	    printk(KERN_INFO "EBBChar: Sent %d characters to the user\n", size_of_message);
-  	    return (size_of_message=0);  // clear the position to the start and return 0
-  	}
-
-  	else {
-  	    printk(KERN_INFO "EBBChar: Failed to send %d characters to the user\n", error_count);
-  	    return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
-  	}
-	return 0;
+        return 0;
+   	}
+   	
+   	else {
+		printk(KERN_INFO "lkmasg1: Failed to send %d characters to the user\n", error_count);
+		return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
+   	}
 }
 
 /*
  * Writes to the device
  */
 
-static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
+static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
+{
 
 	printk(KERN_INFO "write stub");
-	sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
-   	size_of_message = strlen(message);                 // store the length of the stored message
-   	printk(KERN_INFO "EBBChar: Received %zu characters from the user\n", len);
+	
+	int max_message_size = (int)(sizeof(message) - size_of_message - 1); // -1 for null terminator
+
+	// If not enough buffer is available to store a write request, the driver must store only up to the amount available
+   	if (len > max_message_size)
+		len = max_message_size;
+
+	strncat(message, buffer, len); 			// appending received string with its length
+   	size_of_message = strlen(message); 		// store the length of the stored message
+   	printk(KERN_INFO "lkmasg1: Received %zu characters from the user\n", len);
 
 	return len;
 
